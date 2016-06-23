@@ -73,6 +73,7 @@
 
 #include <actionlib/server/simple_action_server.h>
 #include <face_detector/FaceDetectorAction.h>
+#include <face_detector/FaceRectArray.h>
 
 using namespace std;
 
@@ -152,6 +153,7 @@ public:
   // in rviz at runtime (eg the alpha, display time, etc. can't be changed.)
   ros::Publisher cloud_pub_;
   ros::Publisher pos_array_pub_;
+  ros::Publisher rect_array_pub_;
 
   // Display
   bool do_display_; /**< True/false display images with bounding boxes locally. */
@@ -304,6 +306,7 @@ public:
     // Connection callbacks and advertise
     ros::SubscriberStatusCallback pos_pub_connect_cb = boost::bind(&FaceDetector::connectCb, this);
     ros::SubscriberStatusCallback cloud_pub_connect_cb = boost::bind(&FaceDetector::connectCb, this);
+    ros::SubscriberStatusCallback rect_array_pub_connect_cb = boost::bind(&FaceDetector::connectCb, this);
     if (do_continuous_)
       ROS_INFO_STREAM_NAMED("face_detector", "You must subscribe to one of FaceDetector's outbound topics or else it will not publish anything.");
 
@@ -314,6 +317,7 @@ public:
       pos_array_pub_ = nh_.advertise<people_msgs::PositionMeasurementArray>("face_detector/people_tracker_measurements_array", 1, pos_pub_connect_cb, pos_pub_connect_cb);
 
       cloud_pub_ = nh_.advertise<sensor_msgs::PointCloud>("face_detector/faces_cloud", 0, cloud_pub_connect_cb, cloud_pub_connect_cb);
+      rect_array_pub_ = nh_.advertise<face_detector::FaceRectArray>("face_detector/face_rects", 0, rect_array_pub_connect_cb, rect_array_pub_connect_cb);
     }
 
 
@@ -348,7 +352,10 @@ public:
     boost::mutex::scoped_lock lock(connect_mutex_);
     if (use_rgbd_)
     {
-      if (do_continuous_ && cloud_pub_.getNumSubscribers() == 0 && pos_array_pub_.getNumSubscribers() == 0)
+      if (do_continuous_ &&
+          cloud_pub_.getNumSubscribers() == 0 &&
+          pos_array_pub_.getNumSubscribers() == 0 &&
+          rect_array_pub_.getNumSubscribers() == 0)
       {
         ROS_INFO_STREAM_NAMED("face_detector", "You have unsubscribed to FaceDetector's outbound topics, so it will no longer publish anything.");
         image_sub_.unsubscribe();
@@ -372,7 +379,10 @@ public:
     }
     else
     {
-      if (do_continuous_ && cloud_pub_.getNumSubscribers() == 0 && pos_array_pub_.getNumSubscribers() == 0)
+      if (do_continuous_ &&
+          cloud_pub_.getNumSubscribers() == 0 &&
+          pos_array_pub_.getNumSubscribers() == 0 &&
+          rect_array_pub_.getNumSubscribers() == 0)
       {
         ROS_INFO_STREAM_NAMED("face_detector", "You have unsubscribed to FaceDetector's outbound topics, so it will no longer publish anything.");
         image_sub_.unsubscribe();
@@ -709,6 +719,8 @@ private:
       cloud.channels.resize(1);
       cloud.channels[0].name = "intensity";
 
+      face_detector::FaceRectArray rect_array_msg;
+
       for (uint iface = 0; iface < faces_vector.size(); iface++)
       {
         one_face = &faces_vector[iface];
@@ -724,11 +736,19 @@ private:
           cloud.points.push_back(p);
           cloud.channels[0].values.push_back(1.0f);
 
+          face_detector::FaceRect rect;
+          rect.x = one_face->box2d.x;
+          rect.y = one_face->box2d.y;
+          rect.width = one_face->box2d.width;
+          rect.height = one_face->box2d.height;
+          rect_array_msg.rects.push_back(rect);
+
           ngood ++;
         }
       }
 
       cloud_pub_.publish(cloud);
+      rect_array_pub_.publish(rect_array_msg);
       // Done publishing the point cloud.
 
     } // Done if faces_vector.size() > 0

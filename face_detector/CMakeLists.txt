@@ -29,6 +29,10 @@ include_directories(
   ${OpenCV_INCLUDE_DIRS}
   ${catkin_INCLUDE_DIRS})
 
+add_message_files(
+  DIRECTORY msg
+  FILES FaceRect.msg FaceRectArray.msg
+)
 add_action_files(
   DIRECTORY action
   FILES FaceDetector.action
